@@ -4,13 +4,51 @@ import numpy as np
 import argparse
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
-# List of words to exclude from analysis. 
-# English Stop Words includes random words like and, the...
-# The rest of the words are ones that I added after the initial analysis to clean up the results
+
+# List of words to exclude from analysis
 CUSTOM_STOP_WORDS = list(ENGLISH_STOP_WORDS) + [
-    'zohran', 'mamdani', 'new', 'york', 'nyc', 'city', 'mayor', 'candidate', 'chars', 'words',
-    'mayoral', 'said', 'post', 'elect', 'news', 'just', 'stay', 'past'
+    'zohran', 'mamdani', 'new', 'york', 'nyc', 'city', 'mayor', 'candidate', 'chars', 'words', 'daily', 'video', 'interview', 'mayoral', 'gov', 'tuesday', 'friday',
+    'mayoral', 'said', 'post', 'elect', 'elected', 'news', 'just', 'stay', 'past', 'leading', 'year', 'old', 'li', 'lead', 'wednesday', '2025'
 ]
+
+# First round of concatenating -- replace names that appear as either first or last with just last
+PHRASE_MAP_1 = {
+    'donald': 'trump',
+    'rama': 'duwaji',
+}
+
+# Second round of concatenating -- replace multi-word terms with single term for tf-idf
+PHRASE_MAP = {
+    "trump": "donald_trump",
+    "president": "donald_trump",
+    "donald trump": "donald_trump",
+    "jessica tisch": "jessica_tisch",
+    "curtis sliwa": "curtis_sliwa",
+    'eric adams': 'eric_adams',
+    'andrew cuomo': 'andrew_cuomo',
+    'rama duwaji': 'rama_duwaji',
+    'rama': 'rama_duwaji',
+    'duwaji': 'rama_duwaji',
+    'mira nair': 'mira_nair',
+    'white house': 'white_house',
+    'oval office': 'oval_office',
+    'new yorkers': 'new_yorkers',
+    'hakeem jeffries': 'hakeem_jeffries',
+    'cops': 'cop'
+
+}
+
+def preprocess_text(text, phrase_map):
+    if not isinstance(text, str):
+        return ""
+
+    text = text.lower()
+
+    # Replace multi-word phrases with single-token names
+    for phrase, token in phrase_map.items():
+        text = text.replace(phrase, token)
+
+    return text
 
 def main():
     parser = argparse.ArgumentParser()
@@ -21,7 +59,6 @@ def main():
     df.columns = df.columns.str.strip()
     #print(df.columns.tolist())
 
-  # Combine all text components of the article (title, description and content snippet)
     df['combined_text'] = (
         df['title'].fillna('') + ' ' +
         df['description'].fillna('') + ' ' +
@@ -33,7 +70,7 @@ def main():
     categories = [
         'Political Figure Opinions',
         'Political Identity',
-        'Election + Campaign Results',
+        'Election + Campaign Results ',
         'Popular Culture',
         'Affordability',
         'Immigration/ICE',
@@ -46,18 +83,21 @@ def main():
 
     for category in categories:
 
-        category_articles = df[df['Category'] == category]['combined_text'].tolist()
+        raw_articles = df[df['Category'] == category]['combined_text'].tolist()
+        first_category_articles = [preprocess_text(t, PHRASE_MAP_1) for t in raw_articles]
+        category_articles = [preprocess_text(t, PHRASE_MAP) for t in first_category_articles]
+
 
         if len(category_articles) == 0:
             print(f"uh oh no articles for {category}")
             continue
 
-        # ngram_range can also be changed to (2, 2) to get bigrams
         vectorizer = TfidfVectorizer(
             max_features=100, 
             stop_words=CUSTOM_STOP_WORDS, 
             lowercase=True, 
-            ngram_range=(1, 1)
+            ngram_range=(1, 1),
+            norm=None
         )
 
     
@@ -75,7 +115,6 @@ def main():
         for i, (word, score) in enumerate(top_words, 1):
             print(f" {i:2d}. {word:20s} (tf-idf: {score:.4f})")
 
-    # Save to csv
     output_data = []
     for category, words in results.items():
         for rank, (word, score) in enumerate(words, 1):
@@ -93,5 +132,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-
-# Example call: tf_idf.py 'all_articles_annotated.csv'
+    #python tf_idf.py all_articles_annotated.csv
